@@ -69,16 +69,20 @@ needed - it's already your Sheet.
      "External" is fine, fill in an app name, your email, and add yourself
      as a test user. Publishing status can stay "Testing."
    - Application type: **Desktop app**. Name it anything.
-3. Download the resulting JSON and save it at
-   `~/.config/gspread/credentials.json` (create the folder if needed:
-   `mkdir -p ~/.config/gspread`).
-4. Create a new Google Sheet (blank, any name). Copy its ID from the URL:
-   `https://docs.google.com/spreadsheets/d/<THIS_PART>/edit`.
-5. Paste the sheet ID into `.env` as `GOOGLE_SHEET_ID`.
+3. Download the resulting JSON and save it as `credentials.json` in
+   gspread's config folder, which is **OS-specific**:
+   - macOS/Linux: `~/.config/gspread/credentials.json`
+     (create it first: `mkdir -p ~/.config/gspread`)
+   - Windows: `%APPDATA%\gspread\credentials.json`, i.e.
+     `C:\Users\<you>\AppData\Roaming\gspread\credentials.json`
+     (create it first in PowerShell: `mkdir -Force "$env:APPDATA\gspread"`)
+4. Leave `GOOGLE_SHEET_ID` blank in `.env` - the tool creates a new Sheet
+   automatically on first run and prints its URL/ID for you to save if you
+   want to reuse the same sheet on later runs.
 
 The first time you run the tool, it'll open a browser asking you to sign in
-and grant access - approve it, and it caches the token at
-`~/.config/gspread/authorized_user.json` for future runs (no repeat
+and grant access - approve it, and it caches the token next to
+`credentials.json` (as `authorized_user.json`) for future runs (no repeat
 sign-in).
 
 **If your org does allow service account keys** and you'd rather use one:
