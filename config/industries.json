@@ -1,0 +1,64 @@
+{
+  "_comment": "Each key is a selectable --industry value (the 'dropdown'). Each entry lists Google Places Text Search queries used to find businesses in that vertical. 'enabled' entries are ready to run; others are seeded from the high-adoption-industries table and can be flipped on by setting enabled=true once you're ready to expand.",
+
+  "real_estate": {
+    "label": "Real Estate Agents, Brokerages & Property Management",
+    "enabled": true,
+    "queries": [
+      "real estate agent",
+      "small real estate brokerage",
+      "independent real estate agency",
+      "property management company"
+    ]
+  },
+
+  "legal_services": {
+    "label": "Legal Services (small firms)",
+    "enabled": false,
+    "queries": [
+      "personal injury attorney",
+      "family law attorney small firm",
+      "immigration attorney"
+    ]
+  },
+
+  "retail_ecommerce": {
+    "label": "Retail / E-commerce",
+    "enabled": false,
+    "queries": [
+      "boutique online store",
+      "local retail store with online shop"
+    ]
+  },
+
+  "restaurants_hospitality": {
+    "label": "Restaurants / Hospitality",
+    "enabled": false,
+    "queries": [
+      "independent restaurant",
+      "small local cafe",
+      "boutique hotel"
+    ]
+  },
+
+  "healthcare_dental": {
+    "label": "Healthcare / Dental / Clinics",
+    "enabled": false,
+    "queries": [
+      "dental office",
+      "chiropractor",
+      "small medical practice"
+    ]
+  },
+
+  "professional_services": {
+    "label": "Professional Services (accountants, consultants)",
+    "enabled": false,
+    "queries": [
+      "bookkeeping firm",
+      "small accounting firm",
+      "marketing agency",
+      "consultancy firm"
+    ]
+  }
+}
