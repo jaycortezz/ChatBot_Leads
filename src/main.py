@@ -189,22 +189,23 @@ def main():
         return
 
     sheet_id = args.sheet_id
-    service_account_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
 
     if not sheet_id:
         print("\nNo --sheet-id / GOOGLE_SHEET_ID set - skipping Google Sheets write.")
         return
 
+    # Service account is optional - only used if the file actually exists
+    # (some orgs block service account key creation; OAuth is the default).
+    service_account_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
     if not Path(service_account_file).exists():
-        print(
-            f"\nService account file '{service_account_file}' not found - "
-            "skipping Google Sheets write. See README for setup."
-        )
-        return
+        service_account_file = None
 
     from src.sheets import SheetWriter  # imported lazily so --no-sheet doesn't need gspread
 
-    writer = SheetWriter(service_account_file, sheet_id)
+    if service_account_file is None:
+        print("\nNo service account file found - using OAuth (browser sign-in) instead.")
+
+    writer = SheetWriter(sheet_id, service_account_file=service_account_file)
     written = writer.write_leads(leads)
     print("\nWritten to Google Sheet:")
     for tab, count in written.items():

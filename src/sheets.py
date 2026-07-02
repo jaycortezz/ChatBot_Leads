@@ -1,5 +1,12 @@
 """Writes leads to a Google Sheet with three tabs, deduping by place_id so
-re-running the tool doesn't create duplicate rows for the same business."""
+re-running the tool doesn't create duplicate rows for the same business.
+
+Auth: uses OAuth user credentials by default (gspread.oauth()) - this signs
+in as *you*, so no service account or sharing step is needed, and it isn't
+affected by organization policies that block service account key creation.
+If a service account file is available (some orgs do allow them), pass
+service_account_file and it'll be used instead.
+"""
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -20,9 +27,15 @@ TAB_FOR_CATEGORY = {
 
 
 class SheetWriter:
-    def __init__(self, service_account_file: str, sheet_id: str):
-        creds = Credentials.from_service_account_file(service_account_file, scopes=SCOPES)
-        client = gspread.authorize(creds)
+    def __init__(self, sheet_id: str, service_account_file: str | None = None):
+        if service_account_file:
+            creds = Credentials.from_service_account_file(service_account_file, scopes=SCOPES)
+            client = gspread.authorize(creds)
+        else:
+            # Opens a browser for one-time consent, then caches the token
+            # locally (~/.config/gspread/authorized_user.json) for reuse.
+            client = gspread.oauth(scopes=SCOPES)
+
         self.spreadsheet = client.open_by_key(sheet_id)
         self._existing_place_ids: dict[str, set] = {}
 

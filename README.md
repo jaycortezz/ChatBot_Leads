@@ -58,16 +58,35 @@ you automatically — each requires you to create your own account.
 
 ### c) Google Sheets output
 
-1. In the same Google Cloud project, enable **"Google Sheets API"**.
-2. APIs & Services → Credentials → Create Credentials → Service Account.
-   Give it any name, no roles needed.
-3. Open the service account → Keys → Add Key → JSON. Download it and save
-   it as `service_account.json` in the project root (already gitignored).
+Uses OAuth (you sign in as yourself) by default, since many Google Cloud
+orgs now block service account key downloads for security. No sharing step
+needed - it's already your Sheet.
+
+1. In the same Google Cloud project, enable **"Google Sheets API"** (APIs &
+   Services → Library → search it → Enable).
+2. APIs & Services → Credentials → Create Credentials → **OAuth client ID**.
+   - If prompted, configure the OAuth consent screen first: User type
+     "External" is fine, fill in an app name, your email, and add yourself
+     as a test user. Publishing status can stay "Testing."
+   - Application type: **Desktop app**. Name it anything.
+3. Download the resulting JSON and save it at
+   `~/.config/gspread/credentials.json` (create the folder if needed:
+   `mkdir -p ~/.config/gspread`).
 4. Create a new Google Sheet (blank, any name). Copy its ID from the URL:
    `https://docs.google.com/spreadsheets/d/<THIS_PART>/edit`.
-5. Open the JSON key file, find `client_email`, and **share the Google
-   Sheet with that email address** as an Editor.
-6. Paste the sheet ID into `.env` as `GOOGLE_SHEET_ID`.
+5. Paste the sheet ID into `.env` as `GOOGLE_SHEET_ID`.
+
+The first time you run the tool, it'll open a browser asking you to sign in
+and grant access - approve it, and it caches the token at
+`~/.config/gspread/authorized_user.json` for future runs (no repeat
+sign-in).
+
+**If your org does allow service account keys** and you'd rather use one:
+create it the traditional way (Credentials → Service Account → Keys → Add
+Key → JSON), save it as `service_account.json` in the project root, share
+the Sheet with its `client_email` as an Editor, and set
+`GOOGLE_SERVICE_ACCOUNT_FILE=service_account.json` in `.env` - the tool
+will use it automatically instead of OAuth if the file exists.
 
 ## 2. Run it
 
@@ -81,7 +100,7 @@ Useful flags:
   Places API cost.
 - `--max-hunter-calls` — cap on Hunter.io fallback lookups (default 20).
 - `--no-sheet` — skip the Google Sheet write, CSV backup only (useful for a
-  first test run before you've set up the service account).
+  first test run before you've set up Sheets access).
 
 Every run also writes a timestamped CSV to `output/` regardless of the
 Sheets integration, so you never lose a batch.
