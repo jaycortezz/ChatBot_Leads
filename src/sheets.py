@@ -27,7 +27,15 @@ TAB_FOR_CATEGORY = {
 
 
 class SheetWriter:
-    def __init__(self, sheet_id: str, service_account_file: str | None = None):
+    def __init__(
+        self,
+        sheet_id: str | None = None,
+        service_account_file: str | None = None,
+        create_title: str | None = None,
+    ):
+        """If sheet_id is falsy, a new spreadsheet titled create_title is
+        created and used instead - the new sheet's ID/URL are exposed via
+        self.spreadsheet for the caller to report back to the user."""
         if service_account_file:
             creds = Credentials.from_service_account_file(service_account_file, scopes=SCOPES)
             client = gspread.authorize(creds)
@@ -36,7 +44,11 @@ class SheetWriter:
             # locally (~/.config/gspread/authorized_user.json) for reuse.
             client = gspread.oauth(scopes=SCOPES)
 
-        self.spreadsheet = client.open_by_key(sheet_id)
+        if sheet_id:
+            self.spreadsheet = client.open_by_key(sheet_id)
+        else:
+            self.spreadsheet = client.create(create_title or "ChatBot Leads")
+
         self._existing_place_ids: dict[str, set] = {}
 
     def _get_or_create_tab(self, tab_name: str):

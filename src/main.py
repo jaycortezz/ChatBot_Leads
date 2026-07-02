@@ -190,10 +190,6 @@ def main():
 
     sheet_id = args.sheet_id
 
-    if not sheet_id:
-        print("\nNo --sheet-id / GOOGLE_SHEET_ID set - skipping Google Sheets write.")
-        return
-
     # Service account is optional - only used if the file actually exists
     # (some orgs block service account key creation; OAuth is the default).
     service_account_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
@@ -205,7 +201,18 @@ def main():
     if service_account_file is None:
         print("\nNo service account file found - using OAuth (browser sign-in) instead.")
 
-    writer = SheetWriter(sheet_id, service_account_file=service_account_file)
+    if not sheet_id:
+        print("No --sheet-id / GOOGLE_SHEET_ID set - creating a new Google Sheet...")
+
+    writer = SheetWriter(
+        sheet_id=sheet_id or None,
+        service_account_file=service_account_file,
+        create_title=f"ChatBot Leads - {args.industry} - {args.city}",
+    )
+    if not sheet_id:
+        print(f"Created new sheet: {writer.spreadsheet.url}")
+        print(f"(Save its ID as GOOGLE_SHEET_ID in .env to reuse it next time: {writer.spreadsheet.id})")
+
     written = writer.write_leads(leads)
     print("\nWritten to Google Sheet:")
     for tab, count in written.items():
