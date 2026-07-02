@@ -13,7 +13,13 @@ from google.oauth2.service_account import Credentials
 
 from src.models import Lead
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    # drive.file (not full Drive access) is required to *create* a new
+    # spreadsheet via client.create(); it only grants access to files this
+    # app itself creates, not your whole Drive.
+    "https://www.googleapis.com/auth/drive.file",
+]
 
 TAB_BUYER = "Buyer Leads"
 TAB_WEB_DESIGN = "Web Design Leads"
