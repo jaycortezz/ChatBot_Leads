@@ -28,6 +28,30 @@ STALE_TECH_MARKERS = [
 
 STALE_YEAR_THRESHOLD_YEARS = 4
 
+PLATFORM_MARKERS = [
+    ("wixstatic.com", "Wix"),
+    ("wix.com", "Wix"),
+    ("static1.squarespace", "Squarespace"),
+    ("squarespace.com", "Squarespace"),
+    ("godaddysites.com", "GoDaddy Website Builder"),
+    ("weebly.com", "Weebly"),
+    ("carrd.co", "Carrd"),
+]
+
+
+def detect_platform_hint(html: str) -> str:
+    """Best-effort detection of a DIY site-builder platform - a soft signal
+    (not proof) that a business hasn't invested in custom branding/photography,
+    useful for prioritizing design outreach. Empty string means unknown/custom
+    (e.g. WordPress or a bespoke build), not "no signal found = good site"."""
+    if not html:
+        return ""
+    lowered = html.lower()
+    for marker, label in PLATFORM_MARKERS:
+        if marker in lowered:
+            return label
+    return ""
+
 
 def assess_website(url: str, html: str, fetch_status: str) -> dict:
     """Return {'status': 'ok'|'outdated'|'dead'|'none', 'reasons': [str]}."""

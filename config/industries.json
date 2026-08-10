@@ -12,6 +12,16 @@
     ]
   },
 
+  "real_estate_agents": {
+    "label": "Real Estate Agents (individuals, direct email) - for design/photo/video outreach",
+    "enabled": true,
+    "mode": "agents",
+    "queries": [
+      "real estate agent",
+      "realtor"
+    ]
+  },
+
   "legal_services": {
     "label": "Legal Services (small firms)",
     "enabled": false,

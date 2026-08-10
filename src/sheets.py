@@ -11,7 +11,7 @@ service_account_file and it'll be used instead.
 import gspread
 from google.oauth2.service_account import Credentials
 
-from src.models import Lead
+from src.models import AgentLead, Lead
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -24,6 +24,7 @@ SCOPES = [
 TAB_BUYER = "Buyer Leads"
 TAB_WEB_DESIGN = "Web Design Leads"
 TAB_HAS_CHATBOT = "Has Chatbot (Reference)"
+TAB_AGENTS = "Real Estate Agents"
 
 TAB_FOR_CATEGORY = {
     "buyer": TAB_BUYER,
@@ -57,17 +58,17 @@ class SheetWriter:
 
         self._existing_place_ids: dict[str, set] = {}
 
-    def _get_or_create_tab(self, tab_name: str):
+    def _get_or_create_tab(self, tab_name: str, header: list[str] | None = None):
         try:
             ws = self.spreadsheet.worksheet(tab_name)
         except gspread.WorksheetNotFound:
             ws = self.spreadsheet.add_worksheet(title=tab_name, rows=1000, cols=20)
-            ws.append_row(["Place ID"] + Lead.HEADER)
+            ws.append_row(["Place ID"] + (header or Lead.HEADER))
         return ws
 
-    def _seen_place_ids(self, tab_name: str) -> set:
+    def _seen_place_ids(self, tab_name: str, header: list[str] | None = None) -> set:
         if tab_name not in self._existing_place_ids:
-            ws = self._get_or_create_tab(tab_name)
+            ws = self._get_or_create_tab(tab_name, header)
             col_values = ws.col_values(1)[1:]  # skip header
             self._existing_place_ids[tab_name] = set(col_values)
         return self._existing_place_ids[tab_name]
@@ -98,3 +99,18 @@ class SheetWriter:
                 written[tab_name] = len(rows)
 
         return written
+
+    def write_agent_leads(self, leads: list[AgentLead]) -> dict:
+        """Append agent leads to the single 'Real Estate Agents' tab,
+        skipping duplicates by place_id."""
+        ws = self._get_or_create_tab(TAB_AGENTS, AgentLead.HEADER)
+        seen = self._seen_place_ids(TAB_AGENTS, AgentLead.HEADER)
+        rows = []
+        for lead in leads:
+            if lead.place_id in seen:
+                continue
+            rows.append([lead.place_id] + lead.as_row())
+            seen.add(lead.place_id)
+        if rows:
+            ws.append_rows(rows, value_input_option="RAW")
+        return {TAB_AGENTS: len(rows)}

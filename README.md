@@ -24,6 +24,35 @@ Healthcare/Dental, and Professional Services are already stubbed in with
 search terms from the adoption table you shared. Flip `"enabled": true` and
 pass `--industry <key>` to turn one on — that's the "dropdown."
 
+### Alternate mode: `real_estate_agents` (direct-email agent list)
+
+A second, differently-shaped pipeline for a different pitch: selling
+design/photo/video services directly to individual agents, rather than
+chatbots to businesses. Run it with:
+
+```bash
+python -m src.main --industry real_estate_agents --city "Portland, OR" --limit 100
+```
+
+Differences from the default mode:
+- Skips the buyer/web-design/chatbot categorization entirely - there's no
+  "no chatbot" signal for this pitch.
+- Filters out listings that read as a property-management/brokerage *firm*
+  (name contains "property management," "management LLC," etc.) rather than
+  an individual agent, since the pitch is to one person, not a company.
+- Prefers a **named individual's own email** (e.g. `megan@...`) over a
+  generic role inbox (`info@`, `team@`, `office@`, ...) when a site or
+  Hunter.io has both - scored by matching the agent's own name against the
+  email's local-part. Falls back to whatever's available if no personal
+  match is found, and marks the `Email Source` column accordingly.
+- Adds a **Site Platform Hint** column (Wix/Squarespace/GoDaddy/Weebly/
+  Carrd, or blank) as a soft, automatable proxy for "hasn't invested in
+  custom branding" - not a real detector of AI-generated graphics, which
+  isn't something a script can reliably tell (that part's worth eyeballing
+  the actual listing photos yourself before you pitch).
+- Writes to its own **Real Estate Agents** tab instead of the three
+  buyer/web-design/chatbot tabs.
+
 ## 1. Setup
 
 ```bash
