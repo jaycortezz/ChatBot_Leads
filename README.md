@@ -105,9 +105,14 @@ needed - it's already your Sheet.
    - Windows: `%APPDATA%\gspread\credentials.json`, i.e.
      `C:\Users\<you>\AppData\Roaming\gspread\credentials.json`
      (create it first in PowerShell: `mkdir -Force "$env:APPDATA\gspread"`)
-4. Leave `GOOGLE_SHEET_ID` blank in `.env` - the tool creates a new Sheet
-   automatically on first run and prints its URL/ID for you to save if you
-   want to reuse the same sheet on later runs.
+4. Nothing else to configure here - **every run creates its own brand-new
+   Google Sheet** and prints its URL when done. Pass `--sheet-id <id>` if you
+   ever want to write into one specific existing sheet instead. Either way,
+   a business/email/website domain already captured in a *past* run is still
+   automatically skipped (tracked locally in `output/dedup_history.json`,
+   not committed to git), so you never get a duplicate row or a duplicate
+   outreach email just because the results now land in a new sheet each
+   time.
 
 The first time you run the tool, it'll open a browser asking you to sign in
 and grant access - approve it, and it caches the token next to

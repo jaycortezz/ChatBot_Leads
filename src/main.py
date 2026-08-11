@@ -57,7 +57,15 @@ def parse_args(industries: dict) -> argparse.Namespace:
     parser.add_argument("--industry", choices=choices, default="real_estate")
     parser.add_argument("--city", required=True, help='e.g. "Portland, OR"')
     parser.add_argument("--limit", type=int, default=50, help="max businesses to process")
-    parser.add_argument("--sheet-id", default=os.getenv("GOOGLE_SHEET_ID", ""))
+    parser.add_argument(
+        "--sheet-id",
+        default="",
+        help=(
+            "write into this existing sheet instead of creating a new one this run. "
+            "Default behavior (no flag) is a brand-new sheet every run - cross-run "
+            "duplicate protection still applies via src/dedup_history.py regardless."
+        ),
+    )
     parser.add_argument(
         "--max-hunter-calls",
         type=int,
@@ -295,16 +303,22 @@ def main():
         print("\nNo service account file found - using OAuth (browser sign-in) instead.")
 
     if not sheet_id:
-        print("No --sheet-id / GOOGLE_SHEET_ID set - creating a new Google Sheet...")
+        print("No --sheet-id given - creating a new Google Sheet for this run...")
 
+    run_stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     writer = SheetWriter(
         sheet_id=sheet_id or None,
         service_account_file=service_account_file,
-        create_title=f"ChatBot Leads - {args.industry} - {args.city}",
+        create_title=f"ChatBot Leads - {args.industry} - {args.city} - {run_stamp}",
     )
     if not sheet_id:
         print(f"Created new sheet: {writer.spreadsheet.url}")
-        print(f"(Save its ID as GOOGLE_SHEET_ID in .env to reuse it next time: {writer.spreadsheet.id})")
+        print(
+            "(Every run gets its own new sheet by default - pass --sheet-id to write "
+            "into an existing one instead. Either way, a business/email/domain already "
+            "captured in a past run is still automatically skipped, so nothing gets "
+            "duplicated or emailed twice across runs.)"
+        )
 
     written = writer.write_agent_leads(leads) if mode == "agents" else writer.write_leads(leads)
     print("\nWritten to Google Sheet:")

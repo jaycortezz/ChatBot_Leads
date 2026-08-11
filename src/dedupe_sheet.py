@@ -15,18 +15,10 @@ Usage:
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-
-def _normalize_domain(url: str) -> str:
-    if not url:
-        return ""
-    if not url.startswith("http"):
-        url = f"https://{url}"
-    netloc = urlparse(url).netloc.lower()
-    return netloc[4:] if netloc.startswith("www.") else netloc
+from src.util import normalize_domain
 
 
 def main():
@@ -71,7 +63,7 @@ def main():
 
     for offset, row in enumerate(all_values[1:], start=2):
         email = row[email_idx].strip().lower() if len(row) > email_idx else ""
-        domain = _normalize_domain(row[website_idx]) if len(row) > website_idx else ""
+        domain = normalize_domain(row[website_idx]) if len(row) > website_idx else ""
 
         dup_of = seen_emails.get(email) if email else None
         if dup_of is None and domain:
