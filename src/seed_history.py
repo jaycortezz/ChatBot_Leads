@@ -33,19 +33,25 @@ def main():
     if not Path(service_account_file).exists():
         service_account_file = None
 
+    import gspread
+
     from src.sheets import SheetWriter  # imported lazily, matches src/main.py
 
     writer = SheetWriter(sheet_id=sheet_id, service_account_file=service_account_file)
+    print(f"Reading from: {writer.spreadsheet.url}")
+    print(f"Tabs found in this sheet: {[ws.title for ws in writer.spreadsheet.worksheets()]}")
 
     seeded_any = False
     for tab_name in KNOWN_TABS:
         try:
             ws = writer.spreadsheet.worksheet(tab_name)
-        except Exception:
+        except gspread.WorksheetNotFound:
+            print(f"  {tab_name}: no such tab in this sheet - skipping")
             continue
 
         ids, emails, domains = writer._read_existing(ws, [])
         if not (ids or emails or domains):
+            print(f"  {tab_name}: tab exists but has no data - nothing to seed")
             continue
 
         hist_ids, hist_emails, hist_domains = load_history(tab_name)
