@@ -8,6 +8,8 @@ If a service account file is available (some orgs do allow them), pass
 service_account_file and it'll be used instead.
 """
 
+from urllib.parse import urlparse
+
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -31,6 +33,19 @@ TAB_FOR_CATEGORY = {
     "web_design": TAB_WEB_DESIGN,
     "has_chatbot": TAB_HAS_CHATBOT,
 }
+
+
+def _normalize_domain(url: str) -> str:
+    """Google Places sometimes lists the same real business/agent under two
+    different Place IDs (e.g. a personal listing and their brokerage's
+    listing pointing at the same site) - place_id-only dedup misses that.
+    Comparing normalized website domains catches it."""
+    if not url:
+        return ""
+    if not url.startswith("http"):
+        url = f"https://{url}"
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
 
 
 class SheetWriter:
@@ -57,6 +72,8 @@ class SheetWriter:
             self.spreadsheet = client.create(create_title or "ChatBot Leads")
 
         self._existing_place_ids: dict[str, set] = {}
+        self._existing_emails: dict[str, set] = {}
+        self._existing_domains: dict[str, set] = {}
 
     def _get_or_create_tab(self, tab_name: str, header: list[str] | None = None):
         try:
@@ -102,15 +119,52 @@ class SheetWriter:
 
     def write_agent_leads(self, leads: list[AgentLead]) -> dict:
         """Append agent leads to the single 'Real Estate Agents' tab,
-        skipping duplicates by place_id."""
+        skipping duplicates by place_id *and* by email/website domain -
+        the same person/business can show up under more than one Place ID,
+        and for a direct-outreach list a repeated email is what actually
+        matters (it's a double-send risk), not just a repeated Place ID."""
         ws = self._get_or_create_tab(TAB_AGENTS, AgentLead.HEADER)
-        seen = self._seen_place_ids(TAB_AGENTS, AgentLead.HEADER)
+        seen_ids = self._seen_place_ids(TAB_AGENTS, AgentLead.HEADER)
+
+        if TAB_AGENTS not in self._existing_emails:
+            all_values = ws.get_all_values()
+            emails, domains = set(), set()
+            if len(all_values) > 1:
+                header = all_values[0]
+                email_idx = header.index("Direct Email") if "Direct Email" in header else None
+                website_idx = header.index("Website") if "Website" in header else None
+                for row in all_values[1:]:
+                    if email_idx is not None and len(row) > email_idx and row[email_idx]:
+                        emails.add(row[email_idx].strip().lower())
+                    if website_idx is not None and len(row) > website_idx and row[website_idx]:
+                        domain = _normalize_domain(row[website_idx])
+                        if domain:
+                            domains.add(domain)
+            self._existing_emails[TAB_AGENTS] = emails
+            self._existing_domains[TAB_AGENTS] = domains
+
+        seen_emails = self._existing_emails[TAB_AGENTS]
+        seen_domains = self._existing_domains[TAB_AGENTS]
+
         rows = []
         for lead in leads:
-            if lead.place_id in seen:
+            email_key = lead.email.strip().lower() if lead.email else ""
+            domain_key = _normalize_domain(lead.website)
+
+            if lead.place_id in seen_ids:
                 continue
+            if email_key and email_key in seen_emails:
+                continue
+            if domain_key and domain_key in seen_domains:
+                continue
+
             rows.append([lead.place_id] + lead.as_row())
-            seen.add(lead.place_id)
+            seen_ids.add(lead.place_id)
+            if email_key:
+                seen_emails.add(email_key)
+            if domain_key:
+                seen_domains.add(domain_key)
+
         if rows:
             ws.append_rows(rows, value_input_option="RAW")
         return {TAB_AGENTS: len(rows)}
