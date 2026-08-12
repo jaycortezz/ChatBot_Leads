@@ -1,13 +1,17 @@
-"""Writes agent leads to a single 'Real Estate Agents' tab in a Google
-Sheet, deduping by place_id, email, and website domain so re-running the
-tool doesn't create duplicate rows - or worse, a duplicate outreach email -
-for the same person.
+"""Writes agent leads into a new tab of a Google Sheet each run, deduping
+by place_id, email, and website domain so re-running the tool doesn't
+create duplicate rows - or worse, a duplicate outreach email - for the
+same person.
 
-Every run creates its own brand-new spreadsheet (see src/main.py), so the
-sheet itself starts empty each time; cross-run duplicate protection instead
-comes from src/dedup_history.py, a local file that remembers what's already
-been captured across every past run, independent of which specific sheet it
-ended up in.
+Which spreadsheet gets used, and whether a run starts a brand-new one or
+adds a tab to the existing one, is decided by the caller (src/main.py,
+via src/active_sheet.py) - this module just opens whatever sheet_id it's
+given (or creates one) and writes into a named tab within it.
+
+Cross-run duplicate protection uses a *fixed* history scope key
+(dedup_history.AGENTS_SCOPE), independent of the sheet or tab a run's
+results land in - src/dedup_history.py is what actually remembers what's
+already been captured across every past run.
 
 Auth: uses OAuth user credentials by default (gspread.oauth()) - this signs
 in as *you*, so no service account or sharing step is needed, and it isn't
@@ -19,7 +23,7 @@ service_account_file and it'll be used instead.
 import gspread
 from google.oauth2.service_account import Credentials
 
-from src.dedup_history import load_history, save_history
+from src.dedup_history import AGENTS_SCOPE, load_history, save_history
 from src.models import Lead
 from src.util import normalize_domain
 
@@ -30,8 +34,6 @@ SCOPES = [
     # app itself creates, not your whole Drive.
     "https://www.googleapis.com/auth/drive.file",
 ]
-
-TAB_NAME = "Real Estate Agents"
 
 
 class SheetWriter:
@@ -57,18 +59,18 @@ class SheetWriter:
         else:
             self.spreadsheet = client.create(create_title or "Real Estate Agent Leads")
 
-    def _get_or_create_tab(self):
+    def _get_or_create_tab(self, tab_name: str):
         try:
-            ws = self.spreadsheet.worksheet(TAB_NAME)
+            ws = self.spreadsheet.worksheet(tab_name)
         except gspread.WorksheetNotFound:
-            ws = self.spreadsheet.add_worksheet(title=TAB_NAME, rows=1000, cols=20)
+            ws = self.spreadsheet.add_worksheet(title=tab_name, rows=1000, cols=20)
             ws.append_row(["Place ID"] + Lead.HEADER)
         return ws
 
     @staticmethod
     def _read_existing(ws) -> tuple[set, set, set]:
-        """Whatever's already in this specific sheet/tab - usually empty,
-        since every run gets a fresh sheet, but still checked in case the
+        """Whatever's already in this specific tab - usually empty, since
+        each run gets its own new tab, but still checked in case the
         caller explicitly reused an existing one."""
         all_values = ws.get_all_values()
         place_ids, emails, domains = set(), set(), set()
@@ -90,15 +92,15 @@ class SheetWriter:
                     domains.add(domain)
         return place_ids, emails, domains
 
-    def write_leads(self, leads: list[Lead]) -> dict:
-        """Append leads to the Real Estate Agents tab, skipping duplicates by
-        place_id *and* by email/website domain - the same person/business
-        can show up under more than one Place ID, and for a direct-outreach
-        list a repeated email is what actually matters (it's a double-send
-        risk), not just a repeated Place ID."""
-        ws = self._get_or_create_tab()
+    def write_leads(self, leads: list[Lead], tab_name: str) -> dict:
+        """Append leads to the given tab (created if it doesn't exist yet),
+        skipping duplicates by place_id *and* by email/website domain - the
+        same person/business can show up under more than one Place ID, and
+        for a direct-outreach list a repeated email is what actually
+        matters (it's a double-send risk), not just a repeated Place ID."""
+        ws = self._get_or_create_tab(tab_name)
         sheet_ids, sheet_emails, sheet_domains = self._read_existing(ws)
-        hist_ids, hist_emails, hist_domains = load_history(TAB_NAME)
+        hist_ids, hist_emails, hist_domains = load_history(AGENTS_SCOPE)
 
         seen_ids = sheet_ids | hist_ids
         seen_emails = sheet_emails | hist_emails
@@ -130,6 +132,6 @@ class SheetWriter:
         if rows:
             ws.append_rows(rows, value_input_option="RAW")
         if new_ids or new_emails or new_domains:
-            save_history(TAB_NAME, hist_ids | new_ids, hist_emails | new_emails, hist_domains | new_domains)
+            save_history(AGENTS_SCOPE, hist_ids | new_ids, hist_emails | new_emails, hist_domains | new_domains)
 
-        return {TAB_NAME: len(rows)}
+        return {tab_name: len(rows)}

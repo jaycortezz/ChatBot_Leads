@@ -25,13 +25,18 @@ For each agent found in a given city, the tool:
      custom branding/photography."
    - **Active Listings Signal** — an IDX/MLS widget or an actual MLS#
      found on the page. A soft proxy for "currently active," not proof.
-4. Every run creates its **own brand-new Google Sheet** (tab: "Real Estate
-   Agents") and also always saves a local CSV backup in `output/`.
-   Cross-run duplicate protection (by Place ID, email, *and* website
+4. The **first** run ever creates a new Google Sheet and remembers it
+   locally (`output/active_sheet.json`) as your active sheet. **Every run
+   after that adds its own new tab** (named by city + timestamp) to that
+   *same* sheet - one place, growing over time - instead of scattering
+   results across a new file each run. Pass `--new-sheet` if you ever
+   deliberately want to start over with a different sheet. A local CSV
+   backup is also always saved to `output/` regardless.
+5. Cross-run duplicate protection (by Place ID, email, *and* website
    domain — the same person sometimes shows up under two different Google
    Places listings) means re-running never re-adds, or re-emails, someone
-   already captured in an earlier run, even though results land in a new
-   sheet each time.
+   already captured in an earlier run - tracked in `output/dedup_history.json`,
+   independent of which tab or sheet they originally landed in.
 
 ## 1. Setup
 
@@ -89,14 +94,15 @@ needed - it's already your Sheet.
    - Windows: `%APPDATA%\gspread\credentials.json`, i.e.
      `C:\Users\<you>\AppData\Roaming\gspread\credentials.json`
      (create it first in PowerShell: `mkdir -Force "$env:APPDATA\gspread"`)
-4. Nothing else to configure here - **every run creates its own brand-new
-   Google Sheet** and prints its URL when done. Pass `--sheet-id <id>` if you
-   ever want to write into one specific existing sheet instead. Either way,
-   an agent/email/website domain already captured in a *past* run is still
-   automatically skipped (tracked locally in `output/dedup_history.json`,
-   not committed to git), so you never get a duplicate row or a duplicate
-   outreach email just because the results now land in a new sheet each
-   time.
+4. Nothing else to configure here - **the first run creates a Google Sheet
+   and remembers it as your active sheet** (`output/active_sheet.json`,
+   not committed to git); every run after that adds a new tab to that same
+   sheet automatically. Use `--sheet-id <id>` to write into (and make
+   active) a different specific sheet, or `--new-sheet` to start a fresh
+   one. Either way, an agent/email/website domain already captured in a
+   *past* run is still automatically skipped (tracked locally in
+   `output/dedup_history.json`), so you never get a duplicate row or a
+   duplicate outreach email.
 
 The first time you run the tool, it'll open a browser asking you to sign in
 and grant access - approve it, and it caches the token next to
@@ -120,8 +126,10 @@ Useful flags:
 
 - `--limit` — how many agents to process (default 50). Directly drives
   Places API cost.
-- `--sheet-id <id>` — write into a specific existing sheet instead of
-  creating a new one this run.
+- `--sheet-id <id>` — write into this specific sheet instead of the
+  remembered active one (and make it the new active sheet going forward).
+- `--new-sheet` — start a brand-new spreadsheet instead of adding a tab to
+  the remembered active one.
 - `--max-hunter-calls` — cap on Hunter.io fallback lookups (default 20).
 - `--no-sheet` — skip the Google Sheet write, CSV backup only (useful for a
   first test run before you've set up Sheets access).
@@ -179,30 +187,40 @@ listings, their own websites). Before you use the output for outreach:
   the search. Useful if the Sheets write step fails after a run already
   collected the data (e.g. an expired OAuth token) - avoids re-paying for
   and re-running the whole search.
-- `python -m src.dedupe_sheet "Real Estate Agents" [sheet_id]` — one-off
-  cleanup of duplicate rows already sitting in a sheet (matched by email
-  or website domain, not just Place ID). Keeps whichever row has an email
+- `python -m src.dedupe_sheet "<Tab Name>" [sheet_id]` — one-off cleanup
+  of duplicate rows already sitting in a specific tab (matched by email or
+  website domain, not just Place ID). Keeps whichever row has an email
   filled in when only one does.
-- `python -m src.seed_history [sheet_id]` — seeds
-  `output/dedup_history.json` from an existing sheet's current content.
-  Only needed once if you're migrating an older sheet into the current
-  cross-run dedup system.
+- `python -m src.seed_history_from_csvs` — **the one to reach for on a
+  messy history** (e.g. several old, disconnected sheets from earlier
+  testing, most of whose contacts have already been emailed). Scans every
+  agent-shaped CSV in `output/` - the complete record of everything the
+  tool has ever found, regardless of whether it ever made it into a sheet
+  - and seeds `output/dedup_history.json` from all of them at once, so
+  nobody already found in the past can ever resurface in a future run.
+  No sheet URL needed.
+- `python -m src.seed_history [sheet_id]` — narrower version of the above:
+  seeds history from every tab in one specific existing sheet. Useful if
+  you have a sheet whose data isn't reflected in any local CSV (e.g. it
+  was edited by hand).
 
 ## Project layout
 
 ```
-config/search_queries.json  # Places search phrases (edit to add more/split by neighborhood)
-src/places.py                # Google Places Text Search wrapper
+config/search_queries.json    # Places search phrases (edit to add more/split by neighborhood)
+src/places.py                 # Google Places Text Search wrapper
 src/fetch.py                  # shared HTTP fetch (one request per site per run)
-src/website_quality.py       # site platform / active-listings signal heuristics
-src/enrichment.py            # direct-email scraping + Hunter.io fallback
+src/website_quality.py        # site platform / active-listings signal heuristics
+src/enrichment.py             # direct-email scraping + Hunter.io fallback
 src/sheets.py                 # Google Sheets writer (dedupes by place_id/email/domain)
 src/dedup_history.py          # local cross-run duplicate memory
-src/util.py                    # shared helpers (domain normalization)
+src/active_sheet.py           # remembers which sheet is "active" across runs
+src/util.py                   # shared helpers (domain normalization, tab-name sanitizing)
 src/models.py                 # Lead dataclass / row schema
-src/main.py                    # CLI orchestration
+src/main.py                   # CLI orchestration
 src/import_csv.py             # recovery: CSV -> Sheet without re-scraping
-src/dedupe_sheet.py            # recovery: clean up duplicates already in a sheet
-src/seed_history.py            # migration: seed dedup history from an existing sheet
-output/                       # CSV backups + dedup_history.json (gitignored)
+src/dedupe_sheet.py           # recovery: clean up duplicates already in one tab
+src/seed_history.py           # migration: seed dedup history from one sheet's tabs
+src/seed_history_from_csvs.py # migration: seed dedup history from every local CSV
+output/                       # CSV backups, dedup_history.json, active_sheet.json (gitignored)
 ```

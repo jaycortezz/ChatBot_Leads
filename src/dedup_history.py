@@ -18,6 +18,10 @@ from pathlib import Path
 
 HISTORY_PATH = Path(__file__).resolve().parent.parent / "output" / "dedup_history.json"
 
+# Fixed regardless of which sheet/tab a run's results land in - this is
+# what cross-run dedup keys off of, not any particular sheet or tab name.
+AGENTS_SCOPE = "Real Estate Agents"
+
 
 def _read_all() -> dict:
     if not HISTORY_PATH.exists():

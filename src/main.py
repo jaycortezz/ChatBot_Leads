@@ -23,6 +23,7 @@ from src.enrichment import HunterClient, find_direct_email_from_site
 from src.fetch import fetch_site
 from src.models import Lead
 from src.places import PlacesClient
+from src.util import sanitize_tab_name
 from src.website_quality import detect_active_listings_hint, detect_platform_hint
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,10 +63,14 @@ def parse_args() -> argparse.Namespace:
         "--sheet-id",
         default="",
         help=(
-            "write into this existing sheet instead of creating a new one this run. "
-            "Default behavior (no flag) is a brand-new sheet every run - cross-run "
-            "duplicate protection still applies via src/dedup_history.py regardless."
+            "write into this specific sheet instead of the remembered active one "
+            "(and make it the new active sheet for future runs too)."
         ),
+    )
+    parser.add_argument(
+        "--new-sheet",
+        action="store_true",
+        help="start a brand-new spreadsheet instead of adding a tab to the remembered active one",
     )
     parser.add_argument(
         "--max-hunter-calls",
@@ -200,7 +205,20 @@ def main():
     if args.no_sheet:
         return
 
-    sheet_id = args.sheet_id
+    from src.active_sheet import load_active_sheet, save_active_sheet
+    from src.sheets import SheetWriter  # imported lazily so --no-sheet doesn't need gspread
+
+    active = load_active_sheet()
+
+    if args.sheet_id:
+        sheet_id = args.sheet_id
+        reused_active = False
+    elif args.new_sheet or not active:
+        sheet_id = None
+        reused_active = False
+    else:
+        sheet_id = active["sheet_id"]
+        reused_active = True
 
     # Service account is optional - only used if the file actually exists
     # (some orgs block service account key creation; OAuth is the default).
@@ -208,30 +226,36 @@ def main():
     if not Path(service_account_file).exists():
         service_account_file = None
 
-    from src.sheets import SheetWriter  # imported lazily so --no-sheet doesn't need gspread
-
     if service_account_file is None:
         print("\nNo service account file found - using OAuth (browser sign-in) instead.")
 
-    if not sheet_id:
-        print("No --sheet-id given - creating a new Google Sheet for this run...")
+    if reused_active:
+        print(f"Adding a new tab to your active sheet: {active['url']}")
+    elif sheet_id:
+        print(f"Writing into the sheet you specified: {sheet_id}")
+    else:
+        print("No active sheet yet - creating a brand-new Google Sheet...")
 
-    run_stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     writer = SheetWriter(
-        sheet_id=sheet_id or None,
+        sheet_id=sheet_id,
         service_account_file=service_account_file,
-        create_title=f"Real Estate Agent Leads - {args.city} - {run_stamp}",
+        create_title="Real Estate Agent Leads",
     )
-    if not sheet_id:
-        print(f"Created new sheet: {writer.spreadsheet.url}")
+    save_active_sheet(writer.spreadsheet.id, writer.spreadsheet.url)
+
+    if not reused_active:
+        print(f"Sheet: {writer.spreadsheet.url}")
         print(
-            "(Every run gets its own new sheet by default - pass --sheet-id to write "
-            "into an existing one instead. Either way, an agent/email/domain already "
-            "captured in a past run is still automatically skipped, so nothing gets "
-            "duplicated or emailed twice across runs.)"
+            "(This is now your active sheet - every future run adds its own new tab "
+            "here automatically. Pass --new-sheet to start a different one instead. "
+            "Either way, an agent/email/domain already captured in a past run is still "
+            "automatically skipped, so nothing gets duplicated or emailed twice.)"
         )
 
-    written = writer.write_leads(leads)
+    run_stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tab_name = sanitize_tab_name(f"{args.city} - {run_stamp}")
+
+    written = writer.write_leads(leads, tab_name)
     print("\nWritten to Google Sheet:")
     for tab, count in written.items():
         print(f"  {tab}: {count} new rows")

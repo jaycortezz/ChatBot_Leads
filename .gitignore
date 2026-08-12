@@ -8,3 +8,4 @@ venv/
 .DS_Store
 output/*.csv
 output/dedup_history.json
+output/active_sheet.json

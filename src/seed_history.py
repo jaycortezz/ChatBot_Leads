@@ -1,11 +1,15 @@
-"""One-time migration: seed output/dedup_history.json from an existing
-sheet's current content.
+"""One-time migration: seed output/dedup_history.json from every tab in an
+existing sheet's current content.
 
-Needed because of the switch to "a brand-new sheet every run" - without
-this, the very first run after that switch would have no memory of
-whatever's already sitting in an older sheet you'd been reusing, and could
-re-add (or re-email) the same agents/emails again in the new sheet. Run
-this once against your existing sheet before your next run.
+Useful for pulling an older, disconnected sheet's data into the current
+cross-run dedup system (e.g. a sheet from before the "one active sheet,
+new tab per run" model) - without this, a future run would have no memory
+of whatever's already sitting there, and could re-add (or re-email) the
+same agents again.
+
+For a comprehensive reset covering *every* run you've ever done (not just
+one sheet), use src/seed_history_from_csvs.py instead - it doesn't require
+knowing a sheet's ID/URL at all.
 
 Usage:
     python -m src.seed_history <sheet_id>
@@ -18,7 +22,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.dedup_history import load_history, save_history
+from src.dedup_history import AGENTS_SCOPE, load_history, save_history
 
 
 def main():
@@ -31,29 +35,31 @@ def main():
     if not Path(service_account_file).exists():
         service_account_file = None
 
-    import gspread
-
-    from src.sheets import TAB_NAME, SheetWriter  # imported lazily, matches src/main.py
+    from src.sheets import SheetWriter  # imported lazily, matches src/main.py
 
     writer = SheetWriter(sheet_id=sheet_id, service_account_file=service_account_file)
+    worksheets = writer.spreadsheet.worksheets()
     print(f"Reading from: {writer.spreadsheet.url}")
-    print(f"Tabs found in this sheet: {[ws.title for ws in writer.spreadsheet.worksheets()]}")
+    print(f"Tabs found in this sheet: {[ws.title for ws in worksheets]}")
 
-    try:
-        ws = writer.spreadsheet.worksheet(TAB_NAME)
-    except gspread.WorksheetNotFound:
-        print(f"No '{TAB_NAME}' tab in this sheet - nothing to seed.")
-        return
+    ids, emails, domains = set(), set(), set()
+    for ws in worksheets:
+        tab_ids, tab_emails, tab_domains = writer._read_existing(ws)
+        if not (tab_ids or tab_emails or tab_domains):
+            continue
+        print(f"  {ws.title}: {len(tab_ids)} place IDs, {len(tab_emails)} emails, {len(tab_domains)} domains")
+        ids |= tab_ids
+        emails |= tab_emails
+        domains |= tab_domains
 
-    ids, emails, domains = writer._read_existing(ws)
     if not (ids or emails or domains):
-        print(f"'{TAB_NAME}' tab exists but has no data - nothing to seed.")
+        print("No usable data found in any tab - nothing to seed.")
         return
 
-    hist_ids, hist_emails, hist_domains = load_history(TAB_NAME)
-    save_history(TAB_NAME, hist_ids | ids, hist_emails | emails, hist_domains | domains)
-    print(f"Seeded {len(ids)} place IDs, {len(emails)} emails, {len(domains)} domains.")
-    print("Done. Future runs (new sheets) will now correctly skip anyone already captured here.")
+    hist_ids, hist_emails, hist_domains = load_history(AGENTS_SCOPE)
+    save_history(AGENTS_SCOPE, hist_ids | ids, hist_emails | emails, hist_domains | domains)
+    print(f"\nSeeded {len(ids)} place IDs, {len(emails)} emails, {len(domains)} domains total.")
+    print("Done. Future runs will now correctly skip anyone already captured here.")
 
 
 if __name__ == "__main__":

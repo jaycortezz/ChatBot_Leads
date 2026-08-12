@@ -1,11 +1,11 @@
-"""Single shared HTTP fetch used by both chatbot detection and website-quality
-checks, so each business's site is only requested once per run."""
+"""Single shared HTTP fetch for an agent's website, so each site is only
+requested once per run."""
 
 import requests
 
 REQUEST_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (compatible; ChatbotLeadScout/1.0; "
+        "Mozilla/5.0 (compatible; RealEstateAgentLeadScout/1.0; "
         "+https://example.com/bot-info)"
     )
 }
