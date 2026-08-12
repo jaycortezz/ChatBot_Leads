@@ -1,57 +1,37 @@
-# ChatBot Leads
+# Real Estate Agent Leads
 
-Finds small businesses that are good targets for a chatbot pitch, and
-separately flags ones that need a new website (a funnel for web design work).
+Finds **individual real estate agents** (not brokerages, not property
+management firms) in a given city, along with each one's **direct personal
+email** — built for pitching creative/marketing services (design, photo,
+video) straight to the agent, not a company inbox.
 
-For each business found in a given city/industry, the tool:
+For each agent found in a given city, the tool:
 
-1. Looks it up via **Google Places** (name, address, phone, website).
-2. If it has no website, or the website is dead/parked/clearly outdated →
-   **Web Design Leads**.
-3. If it has a live, reasonably current website with **no chatbot widget
-   detected** → **Buyer Leads** (your primary chatbot-sales target).
-4. If it has a live website **with a chatbot already installed** → **Has
-   Chatbot (Reference)** (logged, but excluded from your primary list).
-5. Emails are scraped from the business's own site first (free); if that
-   fails, it falls back to Hunter.io's free-tier domain search.
-6. Everything is written to a Google Sheet (three tabs) and also saved as a
-   local CSV backup in `output/` on every run.
-
-Industries are config-driven (`config/industries.json`) — only **Real
-Estate Agents / Brokerages / Property Management** is enabled to start, but
-Legal Services, Retail/E-commerce, Restaurants/Hospitality,
-Healthcare/Dental, and Professional Services are already stubbed in with
-search terms from the adoption table you shared. Flip `"enabled": true` and
-pass `--industry <key>` to turn one on — that's the "dropdown."
-
-### Alternate mode: `real_estate_agents` (direct-email agent list)
-
-A second, differently-shaped pipeline for a different pitch: selling
-design/photo/video services directly to individual agents, rather than
-chatbots to businesses. Run it with:
-
-```bash
-python -m src.main --industry real_estate_agents --city "Portland, OR" --limit 100
-```
-
-Differences from the default mode:
-- Skips the buyer/web-design/chatbot categorization entirely - there's no
-  "no chatbot" signal for this pitch.
-- Filters out listings that read as a property-management/brokerage *firm*
-  (name contains "property management," "management LLC," etc.) rather than
-  an individual agent, since the pitch is to one person, not a company.
-- Prefers a **named individual's own email** (e.g. `megan@...`) over a
-  generic role inbox (`info@`, `team@`, `office@`, ...) when a site or
-  Hunter.io has both - scored by matching the agent's own name against the
-  email's local-part. Falls back to whatever's available if no personal
-  match is found, and marks the `Email Source` column accordingly.
-- Adds a **Site Platform Hint** column (Wix/Squarespace/GoDaddy/Weebly/
-  Carrd, or blank) as a soft, automatable proxy for "hasn't invested in
-  custom branding" - not a real detector of AI-generated graphics, which
-  isn't something a script can reliably tell (that part's worth eyeballing
-  the actual listing photos yourself before you pitch).
-- Writes to its own **Real Estate Agents** tab instead of the three
-  buyer/web-design/chatbot tabs.
+1. Looks them up via **Google Places** (name, address, phone, website),
+   filtering out anything that reads as a property-management/brokerage
+   *firm* rather than an individual.
+2. Visits their own website and looks for a **direct/personal email**
+   (e.g. `megan@...`) over a generic role inbox (`info@`, `team@`,
+   `office@`) — scored by matching the agent's own name against the
+   email's local-part. Falls back to Hunter.io's free-tier domain search if
+   nothing's found by scraping, and to a generic inbox if no personal
+   address exists anywhere.
+3. Flags two soft, best-effort signals on their site (not hard filters —
+   there's no free/reliable way to pull live MLS listing counts per agent,
+   that data lives behind Zillow/Realtor.com/MLS systems that block
+   scraping or require a paid broker data feed):
+   - **Site Platform Hint** — Wix/Squarespace/GoDaddy/Weebly/Carrd, or
+     blank. A DIY site builder is a soft proxy for "hasn't invested in
+     custom branding/photography."
+   - **Active Listings Signal** — an IDX/MLS widget or an actual MLS#
+     found on the page. A soft proxy for "currently active," not proof.
+4. Every run creates its **own brand-new Google Sheet** (tab: "Real Estate
+   Agents") and also always saves a local CSV backup in `output/`.
+   Cross-run duplicate protection (by Place ID, email, *and* website
+   domain — the same person sometimes shows up under two different Google
+   Places listings) means re-running never re-adds, or re-emails, someone
+   already captured in an earlier run, even though results land in a new
+   sheet each time.
 
 ## 1. Setup
 
@@ -62,8 +42,8 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-You need three things, all free to start. None of this can be done for
-you automatically — each requires you to create your own account.
+You need three things, all free to start. None of this can be done for you
+automatically — each requires you to create your own account.
 
 ### a) Google Places API key
 
@@ -73,7 +53,7 @@ you automatically — each requires you to create your own account.
 4. Enable billing on the project — Places API requires it, but Google gives
    a recurring monthly free credit that comfortably covers a few hundred
    searches. Text Search costs $0.032/request (Essentials SKU) as of this
-   writing; a 50-lead run is roughly 4-8 requests. Set a budget alert.
+   writing; a 100-agent run is typically only 5-6 requests. Set a budget alert.
 5. Paste the key into `.env` as `GOOGLE_PLACES_API_KEY`.
 
 ### b) Hunter.io API key (free tier)
@@ -96,8 +76,12 @@ needed - it's already your Sheet.
 2. APIs & Services → Credentials → Create Credentials → **OAuth client ID**.
    - If prompted, configure the OAuth consent screen first: User type
      "External" is fine, fill in an app name, your email, and add yourself
-     as a test user. Publishing status can stay "Testing."
+     as a test user.
    - Application type: **Desktop app**. Name it anything.
+   - **Publishing status: click "Publish App" to move it to Production**
+     (it stays unverified, fine for personal use). Apps left in "Testing"
+     get a 7-day sign-in expiry, which means re-authenticating weekly for
+     no reason - Production doesn't have that limit.
 3. Download the resulting JSON and save it as `credentials.json` in
    gspread's config folder, which is **OS-specific**:
    - macOS/Linux: `~/.config/gspread/credentials.json`
@@ -108,7 +92,7 @@ needed - it's already your Sheet.
 4. Nothing else to configure here - **every run creates its own brand-new
    Google Sheet** and prints its URL when done. Pass `--sheet-id <id>` if you
    ever want to write into one specific existing sheet instead. Either way,
-   a business/email/website domain already captured in a *past* run is still
+   an agent/email/website domain already captured in a *past* run is still
    automatically skipped (tracked locally in `output/dedup_history.json`,
    not committed to git), so you never get a duplicate row or a duplicate
    outreach email just because the results now land in a new sheet each
@@ -117,7 +101,7 @@ needed - it's already your Sheet.
 The first time you run the tool, it'll open a browser asking you to sign in
 and grant access - approve it, and it caches the token next to
 `credentials.json` (as `authorized_user.json`) for future runs (no repeat
-sign-in).
+sign-in, as long as the app's Published as above).
 
 **If your org does allow service account keys** and you'd rather use one:
 create it the traditional way (Credentials → Service Account → Keys → Add
@@ -129,13 +113,15 @@ will use it automatically instead of OAuth if the file exists.
 ## 2. Run it
 
 ```bash
-python -m src.main --industry real_estate --city "Portland, OR" --limit 50
+python -m src.main --city "Portland, OR" --limit 100
 ```
 
 Useful flags:
 
-- `--limit` — how many businesses to process (default 50). Directly drives
+- `--limit` — how many agents to process (default 50). Directly drives
   Places API cost.
+- `--sheet-id <id>` — write into a specific existing sheet instead of
+  creating a new one this run.
 - `--max-hunter-calls` — cap on Hunter.io fallback lookups (default 20).
 - `--no-sheet` — skip the Google Sheet write, CSV backup only (useful for a
   first test run before you've set up Sheets access).
@@ -143,50 +129,42 @@ Useful flags:
 Every run also writes a timestamped CSV to `output/` regardless of the
 Sheets integration, so you never lose a batch.
 
+### Getting more than ~60 results for one city
+
+Google Places Text Search caps out around 60 results per distinct search
+phrase, and near-synonym phrases ("real estate agent" vs. "realtor") tend
+to return heavily overlapping sets - so you'll hit a ceiling well below the
+true number of agents in a city. Two ways to push past it, both edited in
+`config/search_queries.json`:
+
+- **Add genuinely different phrasing** (not synonyms) — e.g. "buyers
+  agent," "listing agent," "residential real estate agent" — each distinct
+  phrase gets its own fresh ~60-result ceiling from Google's ranking.
+- **Split by neighborhood/suburb** instead of running the whole metro at
+  once — e.g. separate runs for "Southeast Portland, OR," "Northwest
+  Portland, OR," "Beaverton, OR," "Lake Oswego, OR" — each is a distinct
+  enough query to surface a different set of top-ranked results.
+
 ## 3. Reading the output
 
-Each Sheet tab / CSV row includes: business name, address, phone, email,
-website, industry, city, whether a chatbot was detected (+ vendor if
-known), website status (`ok` / `outdated` / `dead` / `none`), where the
-email came from, and notes (e.g. why a site was flagged outdated).
+Each Sheet row / CSV row includes: agent/business name, direct email, where
+that email came from, phone, website, address, city, site platform hint,
+active-listings signal, and notes (e.g. why no email was found).
 
-- **Buyer Leads** — no chatbot detected on a live, current site. Pitch them
-  the chatbot directly.
-- **Web Design Leads** — no website, a dead one, or one flagged outdated
-  (no HTTPS, not mobile-responsive, stale copyright year, parked-page text,
-  or almost no content). Good web design leads; some may also become
-  chatbot buyers once they have a real site.
-- **Has Chatbot (Reference)** — already has a chatbot. Logged so you don't
-  waste time on them, and to see which vendors are already in the market.
+- **Email Source** tells you how confident to be: `site scrape (direct
+  match)` means the email's local-part matched the agent's own name (the
+  good case); `site scrape (generic inbox)` or `hunter.io` means it's the
+  best available but not confirmed personal - worth a quick glance before
+  a highly personalized pitch.
+- **Site Platform Hint** and **Active Listings Signal** are prioritization
+  aids, not filters - nobody gets excluded from the list based on them.
+  Neither one is a substitute for looking at the agent's actual listing
+  photos/flyers yourself before pitching design/photo/video services.
 
-## 4. Notes on detection accuracy
+## 4. Compliance
 
-Chatbot detection is signature-based (it looks for known vendor script
-tags like Intercom, Drift, Tidio, HubSpot, Zendesk, Tawk.to, etc. in the
-page HTML). It will miss chatbots that load exclusively through a tag
-manager after page load, and it can't detect custom-built or very new
-chatbot products it doesn't have a signature for yet — treat "no chatbot
-detected" as "likely no chatbot," not a certainty, and glance at the site
-yourself before a cold pitch. Add new signatures to
-`src/chatbot_detect.py::CHATBOT_SIGNATURES` as you encounter vendors it
-misses.
-
-Hunter.io fallback is only used for **Buyer Leads** (live site, no chatbot,
-no email found by scraping) — the highest-value list — to conserve your
-free-tier quota. Web Design leads with a live-but-outdated site still get a
-site-scrape attempt, but not a Hunter lookup; leads with no website at all
-have no domain to look up, so rely on the phone number from Places.
-
-"Outdated website" is a heuristic score (2+ red flags out of: no HTTPS, no
-mobile viewport tag, stale copyright year, parked-page language, near-empty
-page content). It's meant to surface likely candidates, not to be a
-definitive audit — spot-check before you pitch.
-
-## 5. Compliance
-
-This tool only pulls information businesses already publish (Google
-Business listings, their own websites). Before you use the output for
-outreach:
+This tool only pulls information agents already publish (Google Business
+listings, their own websites). Before you use the output for outreach:
 
 - **Email**: CAN-SPAM requires a working unsubscribe mechanism, accurate
   sender info, and no deceptive subject lines for commercial email.
@@ -194,17 +172,37 @@ outreach:
   including do-not-call list checks in some contexts — check current
   requirements for your state/use case before a calling campaign.
 
+## Recovery / maintenance tools
+
+- `python -m src.import_csv <path-to-csv> [sheet_id]` — upload an
+  already-generated `output/*.csv` straight to a Sheet without re-running
+  the search. Useful if the Sheets write step fails after a run already
+  collected the data (e.g. an expired OAuth token) - avoids re-paying for
+  and re-running the whole search.
+- `python -m src.dedupe_sheet "Real Estate Agents" [sheet_id]` — one-off
+  cleanup of duplicate rows already sitting in a sheet (matched by email
+  or website domain, not just Place ID). Keeps whichever row has an email
+  filled in when only one does.
+- `python -m src.seed_history [sheet_id]` — seeds
+  `output/dedup_history.json` from an existing sheet's current content.
+  Only needed once if you're migrating an older sheet into the current
+  cross-run dedup system.
+
 ## Project layout
 
 ```
-config/industries.json   # industry -> Places search queries ("dropdown")
-src/places.py             # Google Places Text Search wrapper
-src/fetch.py               # shared HTTP fetch (one request per site per run)
-src/chatbot_detect.py       # chatbot vendor signature matching
-src/website_quality.py     # outdated/dead/parked site heuristics
-src/enrichment.py          # email scraping + Hunter.io fallback
-src/sheets.py              # Google Sheets writer (dedupes by place_id)
-src/models.py              # Lead dataclass / row schema
-src/main.py                 # CLI orchestration
-output/                    # CSV backups written on every run (gitignored)
+config/search_queries.json  # Places search phrases (edit to add more/split by neighborhood)
+src/places.py                # Google Places Text Search wrapper
+src/fetch.py                  # shared HTTP fetch (one request per site per run)
+src/website_quality.py       # site platform / active-listings signal heuristics
+src/enrichment.py            # direct-email scraping + Hunter.io fallback
+src/sheets.py                 # Google Sheets writer (dedupes by place_id/email/domain)
+src/dedup_history.py          # local cross-run duplicate memory
+src/util.py                    # shared helpers (domain normalization)
+src/models.py                 # Lead dataclass / row schema
+src/main.py                    # CLI orchestration
+src/import_csv.py             # recovery: CSV -> Sheet without re-scraping
+src/dedupe_sheet.py            # recovery: clean up duplicates already in a sheet
+src/seed_history.py            # migration: seed dedup history from an existing sheet
+output/                       # CSV backups + dedup_history.json (gitignored)
 ```

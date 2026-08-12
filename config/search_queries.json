@@ -1,0 +1,8 @@
+{
+  "_comment": "Google Places Text Search phrases used to find individual real estate agents. Places returns roughly the same top ~60 results per distinct phrase, so near-synonyms overlap heavily - add genuinely different phrasing here (not just synonyms) to surface a different slice of results.",
+
+  "queries": [
+    "real estate agent",
+    "realtor"
+  ]
+}

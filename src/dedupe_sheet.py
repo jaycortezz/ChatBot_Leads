@@ -9,7 +9,7 @@ other.
 
 Usage:
     python -m src.dedupe_sheet "Real Estate Agents"
-    python -m src.dedupe_sheet "Buyer Leads" <sheet_id>   # override GOOGLE_SHEET_ID
+    python -m src.dedupe_sheet "Real Estate Agents" <sheet_id>   # override GOOGLE_SHEET_ID
 """
 
 import os

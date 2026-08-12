@@ -82,37 +82,6 @@ def _all_emails(html: str) -> list[str]:
     return found
 
 
-def _extract_email(html: str) -> str:
-    emails = _all_emails(html)
-    return emails[0] if emails else ""
-
-
-def find_email_from_site(homepage_url: str, homepage_html: str) -> str:
-    """Check the already-fetched homepage first, then a few common contact
-    page paths on the same domain."""
-    email = _extract_email(homepage_html)
-    if email:
-        return email
-
-    if not homepage_url:
-        return ""
-
-    parsed = urlparse(
-        homepage_url if homepage_url.startswith("http") else f"https://{homepage_url}"
-    )
-    base = f"{parsed.scheme}://{parsed.netloc}"
-
-    for path in CONTACT_PATHS:
-        result = fetch_site(urljoin(base, path))
-        if result["status"] != "ok":
-            continue
-        email = _extract_email(result["html"])
-        if email:
-            return email
-
-    return ""
-
-
 # Generic role-inbox prefixes to deprioritize when we specifically want a
 # named individual's direct address (e.g. selling to one agent, not a team).
 GENERIC_LOCAL_PARTS = {
@@ -162,10 +131,10 @@ def pick_direct_email(name: str, emails: list[str]) -> str:
 
 
 def find_direct_email_from_site(name: str, homepage_url: str, homepage_html: str) -> tuple[str, str]:
-    """Like find_email_from_site, but scores every candidate email against
-    the agent's own name and prefers a personal address over a generic one -
-    checking contact pages too if the homepage only turns up something
-    generic. Returns (email, source_note)."""
+    """Checks the homepage first, scoring every candidate email against the
+    agent's own name to prefer a personal address over a generic role
+    inbox - checking a few common contact page paths too if the homepage
+    only turns up something generic. Returns (email, source_note)."""
     tokens = _name_tokens(name)
     emails = _all_emails(homepage_html)
     best = pick_direct_email(name, emails)
@@ -196,7 +165,7 @@ class HunterClient:
         self.max_calls = max_calls
         self.calls_made = 0
 
-    def find_email(self, domain: str, prefer: str = "generic") -> str:
+    def find_email(self, domain: str, prefer: str = "personal") -> str:
         """prefer: Hunter tags each result 'generic' (role inbox) or
         'personal' (named individual) - pass prefer='personal' when you
         specifically want a direct address, not any working inbox."""

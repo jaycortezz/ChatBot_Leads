@@ -4,8 +4,8 @@ sheet's current content.
 Needed because of the switch to "a brand-new sheet every run" - without
 this, the very first run after that switch would have no memory of
 whatever's already sitting in an older sheet you'd been reusing, and could
-re-add (or re-email) the same businesses/emails again in the new sheet.
-Run this once against your existing sheet before your next run.
+re-add (or re-email) the same agents/emails again in the new sheet. Run
+this once against your existing sheet before your next run.
 
 Usage:
     python -m src.seed_history <sheet_id>
@@ -20,8 +20,6 @@ from dotenv import load_dotenv
 
 from src.dedup_history import load_history, save_history
 
-KNOWN_TABS = ["Buyer Leads", "Web Design Leads", "Has Chatbot (Reference)", "Real Estate Agents"]
-
 
 def main():
     load_dotenv()
@@ -35,34 +33,27 @@ def main():
 
     import gspread
 
-    from src.sheets import SheetWriter  # imported lazily, matches src/main.py
+    from src.sheets import TAB_NAME, SheetWriter  # imported lazily, matches src/main.py
 
     writer = SheetWriter(sheet_id=sheet_id, service_account_file=service_account_file)
     print(f"Reading from: {writer.spreadsheet.url}")
     print(f"Tabs found in this sheet: {[ws.title for ws in writer.spreadsheet.worksheets()]}")
 
-    seeded_any = False
-    for tab_name in KNOWN_TABS:
-        try:
-            ws = writer.spreadsheet.worksheet(tab_name)
-        except gspread.WorksheetNotFound:
-            print(f"  {tab_name}: no such tab in this sheet - skipping")
-            continue
+    try:
+        ws = writer.spreadsheet.worksheet(TAB_NAME)
+    except gspread.WorksheetNotFound:
+        print(f"No '{TAB_NAME}' tab in this sheet - nothing to seed.")
+        return
 
-        ids, emails, domains = writer._read_existing(ws, [])
-        if not (ids or emails or domains):
-            print(f"  {tab_name}: tab exists but has no data - nothing to seed")
-            continue
+    ids, emails, domains = writer._read_existing(ws)
+    if not (ids or emails or domains):
+        print(f"'{TAB_NAME}' tab exists but has no data - nothing to seed.")
+        return
 
-        hist_ids, hist_emails, hist_domains = load_history(tab_name)
-        save_history(tab_name, hist_ids | ids, hist_emails | emails, hist_domains | domains)
-        print(f"  {tab_name}: seeded {len(ids)} place IDs, {len(emails)} emails, {len(domains)} domains")
-        seeded_any = True
-
-    if not seeded_any:
-        print("No known tabs with data found in that sheet - nothing to seed.")
-    else:
-        print("Done. Future runs (new sheets) will now correctly skip anyone already captured here.")
+    hist_ids, hist_emails, hist_domains = load_history(TAB_NAME)
+    save_history(TAB_NAME, hist_ids | ids, hist_emails | emails, hist_domains | domains)
+    print(f"Seeded {len(ids)} place IDs, {len(emails)} emails, {len(domains)} domains.")
+    print("Done. Future runs (new sheets) will now correctly skip anyone already captured here.")
 
 
 if __name__ == "__main__":

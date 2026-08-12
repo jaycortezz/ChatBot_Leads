@@ -1,32 +1,11 @@
-"""Heuristics for flagging a business's website as 'outdated' - a web-design
-lead even though a site technically exists. This is a signal score, not a
-certainty: we flag a site as outdated once enough independent red flags are
-present, to avoid subjective single-signal judgment calls.
+"""Soft, best-effort signals read off an agent's own website - not hard
+filters. There's no free/reliable way to pull live MLS listing counts per
+agent (that data lives behind Zillow/Realtor.com/MLS systems that block
+scraping or require a paid broker data feed), so these are proxies to help
+prioritize outreach, not proof of anything.
 """
 
 import re
-from datetime import datetime
-
-from bs4 import BeautifulSoup
-
-PARKED_PAGE_PHRASES = [
-    "domain is for sale",
-    "buy this domain",
-    "this domain is parked",
-    "future home of something quite cool",
-    "godaddy.com/domains",
-    "web hosting coming soon",
-    "site not yet configured",
-]
-
-STALE_TECH_MARKERS = [
-    "powered by frontpage",
-    "adobe flash",
-    "<marquee",
-    "<blink",
-]
-
-STALE_YEAR_THRESHOLD_YEARS = 4
 
 PLATFORM_MARKERS = [
     ("wixstatic.com", "Wix"),
@@ -41,7 +20,7 @@ PLATFORM_MARKERS = [
 
 def detect_platform_hint(html: str) -> str:
     """Best-effort detection of a DIY site-builder platform - a soft signal
-    (not proof) that a business hasn't invested in custom branding/photography,
+    (not proof) that an agent hasn't invested in custom branding/photography,
     useful for prioritizing design outreach. Empty string means unknown/custom
     (e.g. WordPress or a bespoke build), not "no signal found = good site"."""
     if not html:
@@ -53,43 +32,34 @@ def detect_platform_hint(html: str) -> str:
     return ""
 
 
-def assess_website(url: str, html: str, fetch_status: str) -> dict:
-    """Return {'status': 'ok'|'outdated'|'dead'|'none', 'reasons': [str]}."""
-    if fetch_status == "none":
-        return {"status": "none", "reasons": ["no website on record"]}
-    if fetch_status == "dead":
-        return {"status": "dead", "reasons": ["website did not respond / errored"]}
+IDX_MARKERS = [
+    ("idxbroker", "IDX Broker"),
+    ("sparkplatform", "Spark API / Flexmls"),
+    ("flexmls", "Spark API / Flexmls"),
+    ("showcaseidx", "Showcase IDX"),
+    ("realgeeks", "Real Geeks"),
+    ("boomtownroi", "BoomTown"),
+    ("kvcore", "kvCORE"),
+    ("chime.me", "Chime"),
+    ("cincpro", "CINC"),
+    ("diverse solutions", "Diverse Solutions"),
+    ("propertypanorama", "PropertyPanorama"),
+]
 
-    reasons = []
+MLS_NUMBER_RE = re.compile(r"\bMLS\s*(?:#|No\.?|Number|ID)?\s*[:#]?\s*\d{5,}\b", re.IGNORECASE)
 
-    if url and url.startswith("http://"):
-        reasons.append("no HTTPS")
 
+def detect_active_listings_hint(html: str) -> str:
+    """Best-effort signal that a site is actually showing live listings, not
+    a guarantee - a widget can be installed with zero current listings, and
+    some brokerage-hosted sites show listings with none of these markers.
+    Useful for sorting/prioritizing, not for hard-filtering someone out."""
+    if not html:
+        return ""
     lowered = html.lower()
-
-    if not re.search(r'<meta[^>]+name=["\']viewport["\']', lowered):
-        reasons.append("not mobile-responsive (no viewport meta tag)")
-
-    for phrase in PARKED_PAGE_PHRASES:
-        if phrase in lowered:
-            reasons.append("looks like a parked/placeholder page")
-            break
-
-    for marker in STALE_TECH_MARKERS:
+    for marker, label in IDX_MARKERS:
         if marker in lowered:
-            reasons.append(f"uses outdated markup ({marker.strip('<')})")
-            break
-
-    year_match = re.search(r"(?:©|copyright)\D{0,6}(20[0-2]\d)", lowered)
-    if year_match:
-        year = int(year_match.group(1))
-        if datetime.now().year - year >= STALE_YEAR_THRESHOLD_YEARS:
-            reasons.append(f"footer copyright year is stale ({year})")
-
-    soup = BeautifulSoup(html, "html.parser")
-    visible_text = soup.get_text(strip=True)
-    if len(visible_text) < 200:
-        reasons.append("very little content (likely a placeholder page)")
-
-    status = "outdated" if len(reasons) >= 2 else "ok"
-    return {"status": status, "reasons": reasons}
+            return f"IDX widget ({label})"
+    if MLS_NUMBER_RE.search(html):
+        return "MLS# found on page"
+    return ""

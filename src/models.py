@@ -1,63 +1,12 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
 class Lead:
-    place_id: str
-    name: str
-    industry: str
-    address: str = ""
-    phone: str = ""
-    website: str = ""
-    email: str = ""
-    email_source: str = ""
-    city: str = ""
-
-    has_website: bool = False
-    website_status: str = "unknown"  # "ok" | "outdated" | "dead" | "none"
-    chatbot_detected: bool = False
-    chatbot_vendor: str = ""
-
-    category: str = ""  # "buyer" | "web_design" | "has_chatbot"
-    notes: str = ""
-
-    def as_row(self) -> list:
-        return [
-            self.name,
-            self.address,
-            self.phone,
-            self.email,
-            self.website,
-            self.industry,
-            self.city,
-            "Yes" if self.chatbot_detected else "No",
-            self.chatbot_vendor,
-            self.website_status,
-            self.email_source,
-            self.notes,
-        ]
-
-    HEADER = [
-        "Business Name",
-        "Address",
-        "Phone",
-        "Email",
-        "Website",
-        "Industry",
-        "City",
-        "Chatbot Detected",
-        "Chatbot Vendor",
-        "Website Status",
-        "Email Source",
-        "Notes",
-    ]
-
-
-@dataclass
-class AgentLead:
-    """A single real estate agent (individual, not a brokerage/PM firm) with
-    a direct contact email - built for design/photo/video outreach rather
-    than the chatbot buyer/web-design categorization Lead uses."""
+    """A single real estate agent (individual, not a brokerage/property
+    management firm) with a direct contact email - built for pitching
+    creative/marketing services (design, photo, video) directly to the
+    person, not a company inbox."""
 
     place_id: str
     name: str
@@ -68,6 +17,7 @@ class AgentLead:
     email_source: str = ""
     city: str = ""
     platform_hint: str = ""
+    active_listings_hint: str = ""
     notes: str = ""
 
     def as_row(self) -> list:
@@ -80,6 +30,7 @@ class AgentLead:
             self.address,
             self.city,
             self.platform_hint,
+            self.active_listings_hint,
             self.notes,
         ]
 
@@ -92,5 +43,6 @@ class AgentLead:
         "Address",
         "City",
         "Site Platform Hint",
+        "Active Listings Signal",
         "Notes",
     ]
